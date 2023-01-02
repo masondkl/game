@@ -1,5 +1,6 @@
 package me.mason.game
 
+import me.mason.game.component.Camera
 import org.lwjgl.BufferUtils
 import org.lwjgl.glfw.Callbacks
 import org.lwjgl.glfw.GLFW.*

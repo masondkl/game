@@ -1,4 +1,4 @@
-package me.mason.game
+package me.mason.game.component
 
 import org.joml.Matrix4f
 import org.joml.Vector2f
