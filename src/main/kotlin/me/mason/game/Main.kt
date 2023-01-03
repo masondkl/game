@@ -16,7 +16,6 @@ fun List<Actor>.within(withinX: Float, withinY: Float) =
     }
 
 fun main() = window("Game", 1280, 720) {
-    var frame = 0
     val pressed = BitSet(256).apply {
         input { key, action ->
             if (key !in 0 until 256) return@input
@@ -26,10 +25,12 @@ fun main() = window("Game", 1280, 720) {
             }
         }
     }
-    val player = player(pressed)
-    val tiles = world(player, size = WORLD_SMALL)
+    val offset = Vector2f(0f, 0f)
+    val tiles = world(offset, size = WORLD_LARGE)
+    val player = player(pressed, offset)
     val center = Vector2f(1280f/2f, 720f/2f)
     val actors = ArrayList<Actor>()
+    offset.add(center.x, tiles[0].position.y + center.y)
     val gameScene: Draw = {
         val renderTiles = tiles.within(21f * 32f, 21f * 32f)
         tiles.forEach { it.tick(actors) }

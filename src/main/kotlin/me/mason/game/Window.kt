@@ -120,11 +120,6 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
         override val dt get() = dt
         override val elapsed get() = elapsed
         override val camera get() = _camera
-//        private var zoom = 1f
-//        override fun zoom(value: Float) {
-////            glViewport(0, 0, 32 * (originWidth * value / 32 + 1).toInt(), 32 * (originHeight * value / 32 + 1).toInt())
-//            zoom = value
-//        }
 
         override fun input(key: Int, action: Int, block: (Int, Int) -> (Unit)) =
             keyCallbacks.plusAssign { inKey, inAction ->
@@ -142,15 +137,10 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
             shader = textureShader
             _camera = camera
             sheet = spriteSheet
-
             _camera.projection.apply {
                 identity()
                 ortho(0.0f, originWidth.toFloat(), 0.0f, originHeight.toFloat(), 0.0f, 100.0f)
             }
-//            _camera.projection.apply {
-//                identity()
-//                ortho(0.0f, 32.0f * (originWidth * zoom / 32.0f), 0.0f, 32.0f * (originHeight * zoom / 32.0f), 0.0f, 100.0f)
-//            }
             scene = block
         }
 
