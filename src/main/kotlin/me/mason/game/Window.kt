@@ -1,6 +1,6 @@
 package me.mason.game
 
-import me.mason.game.component.Camera
+import me.mason.game.components.Entity
 import org.lwjgl.BufferUtils
 import org.lwjgl.glfw.Callbacks
 import org.lwjgl.glfw.GLFW.*
@@ -11,11 +11,12 @@ import org.lwjgl.opengl.GL20.*
 import org.lwjgl.opengl.GL30.glBindVertexArray
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
+import java.lang.System.arraycopy
+import kotlin.math.min
 import kotlin.time.Duration.Companion.seconds
 
-const val MAX_VERTICES = Short.MAX_VALUE * 2
+const val MAX_VERTICES = Short.MAX_VALUE.toInt()
 const val VERTEX_BYTES = 4 * Float.SIZE_BYTES
-const val MESH_SIZE = 16
 val OFFSETS = intArrayOf(2, 1, 0, 0, 1, 3)
 val ELEMENTS = FloatArray(MAX_VERTICES * 6) {
     (OFFSETS[it % 6] + (it / 6) * 4).toFloat()
@@ -23,13 +24,14 @@ val ELEMENTS = FloatArray(MAX_VERTICES * 6) {
 
 typealias Draw = Window.() -> (Unit)
 interface Window {
+    val id: Long
     val dt: Float
     val elapsed: Float
     val camera: Camera
-//    fun zoom(value: Float)
-    fun input(key: Int = -1, action: Int = -1, block: (Int, Int) -> (Unit))
-    fun scene(textureShader: Shader, camera: Camera, spriteSheet: Bind, block: Draw)
-    fun Window.draw(vararg entries: Drawable)
+    fun keys(key: Int = -1, action: Int = -1, block: (Int, Int) -> (Unit))
+    fun mouse(key: Int = -1, action: Int = -1, block: (Int, Int) -> (Unit))
+    fun scene(textureShader: Shader, spriteSheet: Bind, block: Draw)
+    fun Window.draw(vararg entities: Entity)
 }
 
 fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() -> (Unit)) {
@@ -42,8 +44,12 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
     if (id == MemoryUtil.NULL) throw RuntimeException("Failed to create the GLFW window")
 
     val keyCallbacks = ArrayList<(Int, Int) -> (Unit)>()
-    glfwSetKeyCallback(id) { _, key, scancode, action, mods ->
+    val mouseCallbacks = ArrayList<(Int, Int) -> (Unit)>()
+    glfwSetKeyCallback(id) { _, key, _, action, _ ->
         keyCallbacks.forEach { it(key, action) }
+    }
+    glfwSetMouseButtonCallback(id) { _, key, action, _ ->
+        mouseCallbacks.forEach { it(key, action) }
     }
 
     MemoryStack.stackPush().use { stack ->
@@ -102,7 +108,7 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
     glEnableVertexAttribArray(2)
 
     var scene: Draw = { -> }
-    lateinit var _camera: Camera
+    val camera = camera(vec(0f, 0f))
     lateinit var shader: Shader
     lateinit var sheet: Bind
     var dt = 0f
@@ -117,12 +123,20 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
     }
 
     val window = object : Window {
+        override val id = id
         override val dt get() = dt
         override val elapsed get() = elapsed
-        override val camera get() = _camera
+        override val camera get() = camera
 
-        override fun input(key: Int, action: Int, block: (Int, Int) -> (Unit)) =
+        override fun keys(key: Int, action: Int, block: (Int, Int) -> (Unit)) =
             keyCallbacks.plusAssign { inKey, inAction ->
+                if ((inKey != key && key != -1) || (inAction != action && action != -1))
+                    return@plusAssign
+                block(inKey, inAction)
+            }
+
+        override fun mouse(key: Int, action: Int, block: (Int, Int) -> (Unit)) =
+            mouseCallbacks.plusAssign { inKey, inAction ->
                 if ((inKey != key && key != -1) || (inAction != action && action != -1))
                     return@plusAssign
                 block(inKey, inAction)
@@ -130,28 +144,21 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
 
         override fun scene(
             textureShader: Shader,
-            camera: Camera,
             spriteSheet: Bind,
             block: Draw
         ) {
             shader = textureShader
-            _camera = camera
             sheet = spriteSheet
-            _camera.projection.apply {
-                identity()
-                ortho(0.0f, originWidth.toFloat(), 0.0f, originHeight.toFloat(), 0.0f, 100.0f)
-            }
             scene = block
         }
 
-        override fun Window.draw(vararg entries: Drawable) {
-            entries.forEachIndexed { entryIndex, (bounds, uv) ->
-                val offset = entryIndex * MESH_SIZE
-                val mesh = mesh(bounds, uv)
-                mesh.forEachIndexed { index, value ->
-                    vertices[offset + index] = value
-                }
-            }
+        override fun Window.draw(vararg entities: Entity) {
+            var meshOffset = 0
+            for (entity in entities) {
+                if (meshOffset + entity.mesh.quads * QUAD_UV_PAIR >= vertices.size) continue
+                arraycopy(entity.mesh.data, 0, vertices, meshOffset, entity.mesh.quads * QUAD_UV_PAIR)
+                meshOffset += entity.mesh.quads * QUAD_UV_PAIR
+            }; vertices.fill(0f, min(meshOffset, MAX_VERTICES * 4), vertices.size)
 
             glBindBuffer(GL_ARRAY_BUFFER, vbo)
             glBufferSubData(GL_ARRAY_BUFFER, 0, vertices)
@@ -174,14 +181,11 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
             glDisableVertexAttribArray(1)
             glBindVertexArray(0)
             shader.detach()
-
-            for (index in vertices.indices) vertices[index] = 0f
         }
         init {
-            input(key = GLFW_KEY_ESCAPE) { _, _ -> glfwSetWindowShouldClose(id, true) }
+            keys(key = GLFW_KEY_ESCAPE) { _, _ -> glfwSetWindowShouldClose(id, true) }
         }
     }; block(window)
-//    window.zoom(2.0f)
 
     val start = System.nanoTime()
     var last = -1L

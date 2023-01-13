@@ -1,89 +1,89 @@
 package me.mason.game
 
-import me.mason.game.component.*
-import org.joml.Math.*
-import org.joml.Vector2f
-import org.joml.Vector2i
+import me.mason.game.components.*
 import org.lwjgl.glfw.GLFW.*
 import java.nio.file.Paths
 import java.util.*
+import kotlin.math.abs
 
-val SHEET_SIZE = Vector2i(64, 64)
 
-fun List<Actor>.within(withinX: Float, withinY: Float) =
-    filter {
-        abs(it.position.x - 1280f / 2) < withinX && abs(it.position.y - 720f / 2) < withinY
-    }
+val SHEET_SIZE = vec(128, 128)
+
+val PLAYER_LEFT_1 = uv(vec(0, 0), vec(15, 20))
+val PLAYER_LEFT_2 = uv(vec(15, 0), vec(15, 20))
+val PLAYER_LEFT_3 = uv(vec(30, 0), vec(15, 20))
+val PLAYER_LEFT_4 = uv(vec(45, 0), vec(15, 20))
+
+val PLAYER_RIGHT_1 = uv(vec(60, 0), vec(15, 20))
+val PLAYER_RIGHT_2 = uv(vec(75, 0), vec(15, 20))
+val PLAYER_RIGHT_3 = uv(vec(90, 0), vec(15, 20))
+val PLAYER_RIGHT_4 = uv(vec(105, 0), vec(15, 20))
+
+val PLAYER_WALK_LEFT_1 = uv(vec(0, 20), vec(15, 20))
+val PLAYER_WALK_LEFT_2 = uv(vec(15, 20), vec(15, 20))
+val PLAYER_WALK_LEFT_3 = uv(vec(30, 20), vec(15, 20))
+val PLAYER_WALK_LEFT_4 = uv(vec(45, 20), vec(15, 20))
+
+val PLAYER_WALK_RIGHT_1 = uv(vec(60, 20), vec(15, 20))
+val PLAYER_WALK_RIGHT_2 = uv(vec(75, 20), vec(15, 20))
+val PLAYER_WALK_RIGHT_3 = uv(vec(90, 20), vec(15, 20))
+val PLAYER_WALK_RIGHT_4 = uv(vec(105, 20), vec(15, 20))
 
 fun main() = window("Game", 1280, 720) {
-    val pressed = BitSet(256).apply {
-        input { key, action ->
-            if (key !in 0 until 256) return@input
+    val keys = BitSet(256).apply {
+        keys { key, action ->
+            if (key !in 0 until 256) return@keys
             when(action) {
                 GLFW_PRESS -> set(key)
                 GLFW_RELEASE -> clear(key)
             }
         }
     }
-    val offset = Vector2f(0f, 0f)
-    val tiles = world(offset, size = WORLD_LARGE)
-    val player = player(pressed, offset)
-    val center = Vector2f(1280f/2f, 720f/2f)
-    val actors = ArrayList<Actor>()
-    offset.add(center.x, tiles[0].position.y + center.y)
-    val gameScene: Draw = {
-        val renderTiles = tiles.within(21f * 32f, 21f * 32f)
-        tiles.forEach { it.tick(actors) }
-        player.tick(tiles)
-//        val tileBoundsCorners = renderTiles.fold(ArrayList<Drawable>()) { acc, it ->
-//            acc += listOf(
-//                bounds(
-//                    Vector2f(it.position.x - it.scale.x / 2, it.position.y - it.scale.y / 2),
-//                    Vector2f(8f, 8f)
-//                ) to GOLD,
-//                bounds(
-//                    Vector2f(it.position.x - it.scale.x / 2, it.position.y + it.scale.y / 2),
-//                    Vector2f(8f, 8f)
-//                ) to GOLD,
-//                bounds(
-//                    Vector2f(it.position.x + it.scale.x / 2, it.position.y - it.scale.y / 2),
-//                    Vector2f(8f, 8f)
-//                ) to GOLD,
-//                bounds(
-//                    Vector2f(it.position.x + it.scale.x / 2, it.position.y + it.scale.y / 2),
-//                    Vector2f(8f, 8f)
-//                ) to GOLD
-//            ); acc
-//        }.toTypedArray()
-//        val playerBoundsCorners = arrayOf(
-//            bounds(
-//                Vector2f(1280f / 2f - player.scale.x / 2, 720f / 2f - player.scale.y / 2),
-//                Vector2f(8f, 8f)
-//            ) to GOLD,
-//            bounds(
-//                Vector2f(1280f / 2f - player.scale.x / 2, 720f / 2f + player.scale.y / 2),
-//                Vector2f(8f, 8f)
-//            ) to GOLD,
-//            bounds(
-//                Vector2f(1280f / 2f + player.scale.x / 2, 720f / 2f - player.scale.y / 2),
-//                Vector2f(8f, 8f)
-//            ) to GOLD,
-//            bounds(
-//                Vector2f(1280f / 2f + player.scale.x / 2, 720f / 2f + player.scale.y / 2),
-//                Vector2f(8f, 8f)
-//            ) to GOLD
-//        )
-        draw(
-            *renderTiles.map { it.drawable() }.toTypedArray(),
-//            *tileBoundsCorners,
-            player.drawable(center),
-//            *playerBoundsCorners
-        )
-    }
-
+//    val mouse = BitSet(2).apply {
+//        mouse { key, action ->
+//            if (key !in 0 until 2) return@mouse
+//            when(action) {
+//                GLFW_PRESS -> set(key)
+//                GLFW_RELEASE -> clear(key)
+//            }
+//        }
+//    }
     val textureShader = shader(Paths.get("texture.glsl"))
-    val camera = camera(Vector2f(0f, 0f))
-    val sheet = texture(Paths.get("sheet.png"))
-
-    scene(textureShader, camera, sheet, gameScene)
+    val sheet = texture(Paths.get("sheet128.png"))
+    val world = world(2048)
+    var jumped = false
+    keys(GLFW_KEY_SPACE, GLFW_PRESS) { _, _ -> jumped = true }
+    val player = entity(sprite = PLAYER_LEFT_1, scale = vec(48f, 64f)) {
+        val collisions = world.nearby()
+            .filter { it.mesh.quads > 0 }
+            .toSet()
+        motion.x = if (keys[GLFW_KEY_D]) 500f else 0f +
+                if (keys[GLFW_KEY_A]) -500f else 0f
+        if (jumped && collisions.any { collides(it, vec(0f, -1f)) }) {
+            motion.y = 450f
+        }
+        if (abs(motion.x) > 1f / 32f || abs(motion.y) > 1f / 32f)
+            motion(collisions)
+        gravity()
+        jumped = false
+        mesh[0] = mesh(bounds(position, scale), PLAYER_LEFT_1)
+    }.apply { position.y = world.highest(0f) + scale.y / 2 + 32f }
+    val inventoryView = sliced(
+        vec(0f, 0f), vec(192f, 96f), 32f,
+        vec(4, 91), 24,
+        camera = camera
+    )
+    val gameScene: Draw = {
+        world.tick()
+        player.tick()
+        camera.position = player.position
+        inventoryView.forEach { it.tick() }
+        draw(
+            player,
+            world,
+            *inventoryView
+        )
+        println(1/dt)
+    }
+    scene(textureShader, sheet, gameScene)
 }
