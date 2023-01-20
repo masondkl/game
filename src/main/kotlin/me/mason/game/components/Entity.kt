@@ -1,19 +1,20 @@
 package me.mason.game.components
 
 import me.mason.game.*
-import me.mason.game.plusAssign
+import me.mason.game.Animation
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 
 typealias Tick<T> = context(Window) T.() -> (Unit)
 
 interface Entity {
     val tick: Set<Tick<Entity>>
-    val mesh: Mesh
+    val ui: Boolean
     val position: FloatVector
     val motion: FloatVector
     val scale: FloatVector
-    var sprite: UV?
+    var animations: Array<Animation?>
 }
 
 context(Window)
@@ -22,37 +23,102 @@ fun Entity.tick() {
 }
 
 fun entity(
-    sprite: UV? = null,
-    scale: FloatVector = vec(0f, 0f),
     position: FloatVector = vec(0f, 0f),
-    quads: Int = 1,
+    scale: FloatVector = vec(0f, 0f),
+    vararg animations: Animation?,
+    ui: Boolean = false,
     tick: Tick<Entity>? = null
 ): Entity = object : Entity {
-    override val mesh = mesh(quads)
-    override val position = position
+    override val tick = HashSet<Tick<Entity>>()
+    override val ui = ui
+    override val position = vec(position.x, position.y)
     override val motion = vec(0f, 0f)
     override val scale = scale
-    override var sprite: UV? = sprite
-    override val tick = HashSet<Tick<Entity>>()
-    init {
-        sprite?.also {
-            mesh += mesh(bounds(position, scale), it)
-        }
-        tick?.also {
-            this.tick += it
-        }
-    }
+    override var animations = arrayOf(*animations)
+    init { tick?.also { this.tick += it } }
 }
 
-context(Window)
 fun Entity.clone() = object : Entity {
     override val tick = this@clone.tick.toSet()
-    override val mesh = mesh(this@clone.mesh.quads).also { it += this@clone.mesh }
     override val position = this@clone.position
     override val motion = this@clone.motion
     override val scale = this@clone.scale
-    override var sprite = this@clone.sprite
+    override val ui = this@clone.ui
+    override var animations = this@clone.animations.clone()
 }
+
+fun group(
+    vararg entities: Entity,
+    scale: FloatVector = vec(0f, 0f),
+    ui: Boolean = false,
+    groupTick: Tick<Entity>? = null
+) = object : Entity {
+    override val tick = HashSet<Tick<Entity>>()
+    override val motion = vec(0f, 0f)
+    fun change(to: Float, get: (Entity) -> (Float)): Float {
+        val min = entities.minOf(get)
+        val max = entities.maxOf(get)
+        val center = min + (max - min) / 2f
+        return to - center
+    }
+    override val position = object : FloatVector by vec(0f, 0f) {
+        override var x: Float
+            get() {
+                val min = entities.minOf { it.position.x }
+                val max = entities.maxOf { it.position.x }
+                return min + (max - min) / 2f
+            }
+            set(value) {
+                val change = change(value) { it.position.x }
+                entities.forEach { it.position.x += change }
+            }
+        override var y: Float
+            get() {
+                val min = entities.minOf { it.position.y }
+                val max = entities.maxOf { it.position.y }
+                return min + (max - min) / 2f
+            }
+            set(value) {
+                val change = change(value) { it.position.y }
+                entities.forEach { it.position.y += change }
+            }
+    }
+    override val scale = scale
+    override val ui = ui
+    override var animations: Array<Animation?>
+        get() {
+            var animIndex = 0
+            val animations = entities
+                .fold(ArrayList<Animation?>()) { acc, entity ->
+                    acc += entity.animations.map { animation ->
+                        val result =
+                            if (animation == null) null
+                            else {
+                                animation(*Array(animation.states.size) { index ->
+                                    val state = animation.states[index]
+                                    val offset = state.offset + vec(
+                                        change(entity.position.x) { it.position.x },
+                                        change(entity.position.y) { it.position.y }
+                                    )
+//                                    vec(
+//                                        change(entity.position.x) { it.position.x },
+//                                        change(entity.position.y) { it.position.y }
+//                                    )
+                                    state(state.range, state.sprites, state.scale, offset, state.rate)
+                                })
+                            }
+                        animIndex++; result
+                    }; acc
+                }.toTypedArray()
+            return animations
+        }
+        set(value) { }
+    init {
+        tick += { entities.forEach { it.tick() } }
+        groupTick?.also { tick += it }
+    }
+}
+
 //
 //fun Entity.mesh(): Mesh? =
 //    if (sprite != null) mesh(bounds(position, scale) to sprite!!)
@@ -64,11 +130,10 @@ fun Entity.collides(b: Entity, change: FloatVector = vec(0f, 0f), expand: FloatV
         position.x + change.x - (scale.x + expand.x) / 2 < b.position.x + b.scale.x / 2 &&
         position.x + change.x + (scale.x + expand.x) / 2 > b.position.x - b.scale.x / 2
 
-fun Entity.move(change: FloatVector, collision: Set<Entity>) = collision.apply {
-    val vertical = vec(0f, change.y)
+fun Entity.move(change: FloatVector, collision: List<Entity>) = collision.apply {
     val intersectsHor = find { collides(it, change = vec(change.x, 0f)) }
     val intersectsDia = find { collides(it, change = vec(change.x, change.y)) }
-    val intersectVer = find { collides(it, change = vertical) }
+    val intersectVer = find { collides(it, change = vec(0f, change.y)) }
     if (intersectVer != null) {
         val max = intersectVer.position.y + intersectVer.scale.y / 2
         val min = position.y + change.y - scale.y / 2
@@ -90,8 +155,11 @@ fun Entity.move(change: FloatVector, collision: Set<Entity>) = collision.apply {
 }
 
 context(Window)
-fun Entity.motion(collision: Set<Entity>) {
+fun Entity.motion(collision: List<Entity>) {
     motion.x *= 0.8f
+    if (motion.y > 0f && collision.any { collides(it, vec(0f, 1f)) }) {
+        motion.y = 0f
+    }
     val change = (motion * dt)
         .min(vec(32f, 32f)).max(vec(-32f, -32f)) // stop motion from putting you into blocks
     move(change, collision)

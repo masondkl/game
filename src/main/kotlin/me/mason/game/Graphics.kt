@@ -12,8 +12,9 @@ import kotlin.io.path.readBytes
 
 typealias UV = FloatArray
 fun uv(position: IntVector, scale: IntVector): UV {
-    val min = (position.float() / SHEET_SIZE.float())
-    val max = ((position.float() + scale.float()) / SHEET_SIZE.float())
+    val pixel = vec(1f / SHEET_SIZE.x, 1f / SHEET_SIZE.y)
+    val min = (position.float() / SHEET_SIZE.float()) + pixel * 0.01f
+    val max = ((position + scale).float() / SHEET_SIZE.float()) - pixel * 0.01f
     return floatArrayOf(
         max.x, max.y,
         min.x, min.y,

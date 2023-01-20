@@ -12,10 +12,11 @@ import org.lwjgl.opengl.GL30.glBindVertexArray
 import org.lwjgl.system.MemoryStack
 import org.lwjgl.system.MemoryUtil
 import java.lang.System.arraycopy
+import java.util.BitSet
 import kotlin.math.min
 import kotlin.time.Duration.Companion.seconds
 
-const val MAX_VERTICES = Short.MAX_VALUE.toInt()
+const val MAX_VERTICES = Short.MAX_VALUE
 const val VERTEX_BYTES = 4 * Float.SIZE_BYTES
 val OFFSETS = intArrayOf(2, 1, 0, 0, 1, 3)
 val ELEMENTS = FloatArray(MAX_VERTICES * 6) {
@@ -28,10 +29,12 @@ interface Window {
     val dt: Float
     val elapsed: Float
     val camera: Camera
+    val keys: BitSet
+    val mouse: BitSet
     fun keys(key: Int = -1, action: Int = -1, block: (Int, Int) -> (Unit))
     fun mouse(key: Int = -1, action: Int = -1, block: (Int, Int) -> (Unit))
     fun scene(textureShader: Shader, spriteSheet: Bind, block: Draw)
-    fun Window.draw(vararg entities: Entity)
+    fun Window.draw(vararg entities: Entity?)
 }
 
 fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() -> (Unit)) {
@@ -65,7 +68,7 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
     }
 
     glfwMakeContextCurrent(id)
-    glfwSwapInterval(1)
+    glfwSwapInterval(0)
     glfwShowWindow(id)
     createCapabilities()
     glEnable(GL_BLEND)
@@ -122,11 +125,30 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
         glViewport(0, 0, width, height)
     }
 
+    val mesh = mesh(MAX_VERTICES / 4)
     val window = object : Window {
         override val id = id
         override val dt get() = dt
         override val elapsed get() = elapsed
         override val camera get() = camera
+        override val keys = BitSet(256).apply {
+            keys { key, action ->
+                if (key !in 0 until 256) return@keys
+                when(action) {
+                    GLFW_PRESS -> set(key)
+                    GLFW_RELEASE -> clear(key)
+                }
+            }
+        }
+        override val mouse = BitSet(2).apply {
+            mouse { key, action ->
+                if (key !in 0 until 2) return@mouse
+                when(action) {
+                    GLFW_PRESS -> set(key)
+                    GLFW_RELEASE -> clear(key)
+                }
+            }
+        }
 
         override fun keys(key: Int, action: Int, block: (Int, Int) -> (Unit)) =
             keyCallbacks.plusAssign { inKey, inAction ->
@@ -151,14 +173,36 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
             sheet = spriteSheet
             scene = block
         }
-
-        override fun Window.draw(vararg entities: Entity) {
+        var previous = 0
+        override fun Window.draw(vararg entities: Entity?) {
             var meshOffset = 0
-            for (entity in entities) {
-                if (meshOffset + entity.mesh.quads * QUAD_UV_PAIR >= vertices.size) continue
-                arraycopy(entity.mesh.data, 0, vertices, meshOffset, entity.mesh.quads * QUAD_UV_PAIR)
-                meshOffset += entity.mesh.quads * QUAD_UV_PAIR
-            }; vertices.fill(0f, min(meshOffset, MAX_VERTICES * 4), vertices.size)
+            for (entity in entities.filterNotNull()) {
+                entity.animations.filterNotNull().forEach {
+                    val (sprite, scale, offset) = it.next(elapsed)
+                    if ((meshOffset + 1) * QUAD_UV_PAIR >= vertices.size) {
+                        return@forEach
+                    }
+//                    println(meshOffset)
+//                    println()
+//                    println("scale: ${it.scale.x}, ${it.scale.y}")
+//                    println("offset: ${it.offset.x}, ${it.offset.y}")
+//                    println("position: ${entity.position.x}, ${entity.position.y}")
+//                    println("boundspos: ${entity.position.x + it.offset.x}, ${entity.position.y + it.offset.y}")
+//                    if (offset.x > 0f || offset.y > 0f)
+//                        println("\noffset: ${offset.x}, ${offset.y}")
+                    mesh[meshOffset] = mesh(bounds(
+                        entity.position + offset + (
+                                if (entity.ui) camera.position
+                                else vec(0f, 0f)
+                        ), scale
+                    ), sprite)
+                    meshOffset++
+                }
+            }
+            arraycopy(mesh.data, 0, vertices, 0, mesh.quads * QUAD_UV_PAIR)
+            if (previous > mesh.quads * QUAD_UV_PAIR) {
+                vertices.fill(0f, mesh.quads * QUAD_UV_PAIR, previous)
+            }; previous = mesh.quads * QUAD_UV_PAIR
 
             glBindBuffer(GL_ARRAY_BUFFER, vbo)
             glBufferSubData(GL_ARRAY_BUFFER, 0, vertices)

@@ -26,7 +26,5 @@ out vec4 color;
 
 void main()
 {
-    vec4 textureColor = texture(TEX_SAMPLER, fTexCoords);
-    float alpha = textureColor.w;
-    if (alpha > 0) color = texture(TEX_SAMPLER, fTexCoords);
+    color = texture(TEX_SAMPLER, fTexCoords);
 }

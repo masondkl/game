@@ -10,17 +10,13 @@ interface Mesh {
 }
 
 operator fun Mesh.set(index: Int, mesh: Mesh) {
+    if (data.size < index * QUAD_UV_PAIR) error("No space")
     val size = QUAD_UV_PAIR * mesh.quads
     arraycopy(
         mesh.data, 0,
         data, index * QUAD_UV_PAIR,
         size
-    )
-}
-
-operator fun Mesh.plusAssign(b: Mesh) {
-    arraycopy(b.data, 0, data, quads * QUAD_UV_PAIR, b.quads * QUAD_UV_PAIR)
-    quads += b.quads
+    ); quads = (index * QUAD_UV_PAIR + size) / QUAD_UV_PAIR
 }
 
 fun mesh(bounds: Bounds, uv: UV) = object : Mesh {

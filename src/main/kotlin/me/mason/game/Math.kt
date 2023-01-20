@@ -9,13 +9,9 @@ interface FloatVector {
     var x: Float; var y: Float
     fun distance(b: FloatVector): Float
     operator fun plusAssign(b: FloatVector)
-    operator fun plusAssign(v: Float)
     operator fun minusAssign(b: FloatVector)
-    operator fun minusAssign(v: Float)
     operator fun divAssign(b: FloatVector)
-    operator fun divAssign(v: Float)
     operator fun timesAssign(b: FloatVector)
-    operator fun timesAssign(v: Float)
     override fun equals(other: Any?): Boolean
 }
 
@@ -24,13 +20,9 @@ fun vec(ox: Float = 0f, oy: Float = 0f) = object : FloatVector {
     override var y = oy
     override fun distance(b: FloatVector) = sqrt((x - b.x).pow(2) + (y - b.y).pow(2))
     override fun plusAssign(b: FloatVector) { x += b.x; y += b.y }
-    override fun plusAssign(v: Float) { x += v; y += v }
     override fun minusAssign(b: FloatVector) { x -= b.x; y -= b.y }
-    override fun minusAssign(v: Float) { x -= v; y -= v }
     override fun divAssign(b: FloatVector) { x /= b.x; y /= b.y }
-    override fun divAssign(v: Float) { x /= v; y /= v }
     override fun timesAssign(b: FloatVector) { x *= b.x; y *= b.y }
-    override fun timesAssign(v: Float) { x *= v; y *= v }
     override fun equals(other: Any?): Boolean {
         if (other !is FloatVector) return false
         return x == other.x && y == other.y
@@ -39,6 +31,12 @@ fun vec(ox: Float = 0f, oy: Float = 0f) = object : FloatVector {
 
 fun FloatVector.min(b: FloatVector) = vec(min(x, b.x), min(y, b.y))
 fun FloatVector.max(b: FloatVector) = vec(max(x, b.x), max(y, b.y))
+
+operator fun FloatVector.plusAssign(v: Float) { this += vec(v, v) }
+operator fun FloatVector.minusAssign(v: Float) { this -= vec(v, v) }
+operator fun FloatVector.divAssign(v: Float) { this /= vec(v, v) }
+operator fun FloatVector.timesAssign(v: Float) { this *= vec(v, v) }
+
 operator fun FloatVector.plus(b: FloatVector) = vec(x, y).also { it += b }
 operator fun FloatVector.plus(v: Float) = vec(x, y).also { it += v }
 operator fun FloatVector.minus(b: FloatVector) = vec(x, y).also { it -= b }
