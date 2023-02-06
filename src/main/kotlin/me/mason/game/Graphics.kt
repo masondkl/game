@@ -3,37 +3,18 @@ package me.mason.game
 import org.joml.Matrix4f
 import org.lwjgl.BufferUtils
 import org.lwjgl.opengl.GL20.*
+import org.lwjgl.opengl.GL30.glBindVertexArray
+import org.lwjgl.opengl.GL30.glGenVertexArrays
 import org.lwjgl.stb.STBImage.stbi_image_free
 import org.lwjgl.stb.STBImage.stbi_load
-import java.lang.System.arraycopy
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.readBytes
 
-typealias UV = FloatArray
-fun uv(position: IntVector, scale: IntVector): UV {
-    val pixel = vec(1f / SHEET_SIZE.x, 1f / SHEET_SIZE.y)
-    val min = (position.float() / SHEET_SIZE.float()) + pixel * 0.01f
-    val max = ((position + scale).float() / SHEET_SIZE.float()) - pixel * 0.01f
-    return floatArrayOf(
-        max.x, max.y,
-        min.x, min.y,
-        max.x, min.y,
-        min.x, max.y
-    )
-}
-
-typealias Bounds = FloatArray
-fun bounds(position: FloatVector, scale: FloatVector): Bounds {
-    val radius = scale / 2f
-    val min = position - radius
-    val max = position + radius
-    return floatArrayOf(
-        max.x, min.y,
-        min.x, max.y,
-        max.x, max.y,
-        min.x, min.y
-    )
+const val MAX_VERTICES = (Short.MAX_VALUE).toInt()
+val ELEMENT_ORDER = intArrayOf(2, 1, 0, 0, 1, 3)
+val ELEMENTS = IntArray(MAX_VERTICES * 6) {
+    ELEMENT_ORDER[it % 6] + (it / 6) * 4
 }
 
 interface Bind {
@@ -78,16 +59,53 @@ fun texture(path: Path): Bind = glGenTextures().let { id ->
 }
 
 interface Shader : Bind {
+    val attributesLength: Int
+    val quadLength: Int
+    val attributes: Int
+    val vao: Int
+    val vbo: Int
     fun mat4f(name: String, mat4: Matrix4f)
     fun vec2f(name: String, vec2: FloatVector)
-
     fun intArray(name: String, value: IntArray)
     fun float(name: String, value: Float)
     fun int(name: String, value: Int)
     fun texture(name: String, slot: Int)
 }
 
-fun shader(path: Path): Shader {
+fun vertexBuffers(vararg attributes: Int): Pair<Int, Int> {
+    val vao = glGenVertexArrays()
+    val vbo = glGenBuffers()
+    val ebo = glGenBuffers()
+    val vertexBytes = attributes.fold(0) { acc, it -> acc + it } * Float.SIZE_BYTES
+
+    glBindVertexArray(vao)
+    glBindBuffer(GL_ARRAY_BUFFER, vbo)
+    glBufferData(GL_ARRAY_BUFFER, (MAX_VERTICES * vertexBytes).toLong(), GL_DYNAMIC_DRAW)
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo)
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, BufferUtils.createIntBuffer(ELEMENTS.size).put(ELEMENTS).flip(), GL_STATIC_DRAW)
+
+    var offset = 0
+    attributes.forEachIndexed { index, attribute ->
+        glVertexAttribPointer(index, attribute, GL_FLOAT, false, vertexBytes, (offset * Float.SIZE_BYTES).toLong())
+        glEnableVertexAttribArray(index)
+        offset += attribute
+    }
+
+//    glVertexAttribPointer(0, SHADER_POSITION_LENGTH_FLOAT, GL_FLOAT, false, VERTEX_BYTES, 0)
+//    glEnableVertexAttribArray(0)
+//    glVertexAttribPointer(1, SHADER_SCALE_LENGTH_FLOAT, GL_FLOAT, false, VERTEX_BYTES, (SHADER_POSITION_LENGTH_FLOAT * Float.SIZE_BYTES).toLong())
+//    glEnableVertexAttribArray(1)
+//    glVertexAttribPointer(2, SHADER_START_LENGTH_FLOAT, GL_FLOAT, false, VERTEX_BYTES, ((SHADER_POSITION_LENGTH_FLOAT + SHADER_SCALE_LENGTH_FLOAT) * Float.SIZE_BYTES).toLong())
+//    glEnableVertexAttribArray(2)
+//    glVertexAttribPointer(3, SHADER_UV_START_LENGTH_FLOAT, GL_FLOAT, false, VERTEX_BYTES, ((SHADER_POSITION_LENGTH_FLOAT + SHADER_SCALE_LENGTH_FLOAT + SHADER_START_LENGTH_FLOAT) * Float.SIZE_BYTES).toLong())
+//    glEnableVertexAttribArray(3)
+//    glVertexAttribPointer(4, SHADER_UV_SCALE_LENGTH_FLOAT, GL_FLOAT, false, VERTEX_BYTES, ((SHADER_POSITION_LENGTH_FLOAT + SHADER_SCALE_LENGTH_FLOAT + SHADER_START_LENGTH_FLOAT + SHADER_UV_START_LENGTH_FLOAT) * Float.SIZE_BYTES).toLong())
+//    glEnableVertexAttribArray(4)
+    return Pair(vao, vbo)
+}
+
+fun shader(path: Path, vararg attributes: Int): Shader {
+    if (attributes.isEmpty()) error("no attributes on shader")
     val (vertex, fragment) = String(path.readBytes()).split("|")
     val vertexID = glCreateShader(GL_VERTEX_SHADER)
     glShaderSource(vertexID, vertex)
@@ -114,8 +132,16 @@ fun shader(path: Path): Shader {
         val len = glGetProgrami(program, GL_INFO_LOG_LENGTH)
         error(glGetProgramInfoLog(program, len))
     }
+    val (vao, vbo) = vertexBuffers(*attributes)
     val self = Bind({ glUseProgram(program) }, { glUseProgram(0) })
+    val attributesLength = attributes.fold(0) { acc, attribute -> acc + attribute }
     return object : Shader, Bind by self {
+        override val attributesLength = attributesLength
+        override val quadLength = attributesLength * 4
+        override val attributes = attributes.size
+        override val vao = vao
+        override val vbo = vbo
+
         private fun location(name: String, block: (Int) -> (Unit)) {
             val location = glGetUniformLocation(program, name)
             self.attach()
@@ -126,23 +152,18 @@ fun shader(path: Path): Shader {
             mat4.get(buffer)
             glUniformMatrix4fv(it, false, buffer)
         }
-
         override fun vec2f(name: String, vec2: FloatVector) = location(name) {
             glUniform2f(it, vec2.x, vec2.y)
         }
-
         override fun intArray(name: String, value: IntArray) = location(name) {
             glUniform1iv(it, value)
         }
-
         override fun float(name: String, value: Float) = location(name) {
             glUniform1f(it, value)
         }
-
         override fun int(name: String, value: Int) = location(name) {
             glUniform1i(it, value)
         }
-
         override fun texture(name: String, slot: Int) = location(name) {
             glUniform1i(it, slot)
         }

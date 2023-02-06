@@ -9,8 +9,6 @@ interface Camera {
     val view: Matrix4f
 }
 
-private val FORWARD = Vector3f(0.0f, 0.0f, -1.0f)
-private val UP = Vector3f(0.0f, 1.0f, 0.0f)
 fun camera(position: FloatVector) = object : Camera {
     private val _position = position
     override var position
@@ -25,9 +23,9 @@ fun camera(position: FloatVector) = object : Camera {
     private fun look() {
         view.identity()
         view.lookAt(
-            Vector3f(position.x, position.y, 20.0f),
-            FORWARD.add(position.x, position.y, 0.0f, Vector3f()),
-            UP
+            Vector3f(_position.x, _position.y, 20f),
+            Vector3f(_position.x, _position.y, -1f),
+            Vector3f(0f, 1f, 0f)
         )
     }
     init { look() }

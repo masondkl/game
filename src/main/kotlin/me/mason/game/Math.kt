@@ -15,7 +15,8 @@ interface FloatVector {
     override fun equals(other: Any?): Boolean
 }
 
-fun vec(ox: Float = 0f, oy: Float = 0f) = object : FloatVector {
+fun vec(value: Float) = vec(value, value)
+fun vec(ox: Float, oy: Float) = object : FloatVector {
     override var x = ox
     override var y = oy
     override fun distance(b: FloatVector) = sqrt((x - b.x).pow(2) + (y - b.y).pow(2))
@@ -54,33 +55,31 @@ interface IntVector {
     fun distance(b: IntVector): Int
 
     operator fun plusAssign(b: IntVector)
-    operator fun plusAssign(v: Int)
     operator fun minusAssign(b: IntVector)
-    operator fun minusAssign(v: Int)
     operator fun divAssign(b: IntVector)
-    operator fun divAssign(v: Int)
     operator fun timesAssign(b: IntVector)
-    operator fun timesAssign(v: Int)
     override fun equals(other: Any?): Boolean
 }
 
-fun vec(ox: Int = 0, oy: Int = 0) = object : IntVector {
+fun vec(value: Int) = vec(value, value)
+fun vec(ox: Int, oy: Int) = object : IntVector {
     override var x = ox
     override var y = oy
     override fun distance(b: IntVector) = sqrt((x - b.x).toDouble().pow(2) + (y - b.y).toDouble().pow(2)).toInt()
     override fun plusAssign(b: IntVector) { x += b.x; y += b.y }
-    override fun plusAssign(v: Int) { x += v; y += v }
     override fun minusAssign(b: IntVector) { x -= b.x; y -= b.y }
-    override fun minusAssign(v: Int) { x -= v; y -= v }
     override fun divAssign(b: IntVector) { x /= b.x; y /= b.y }
-    override fun divAssign(v: Int) { x /= v; y /= v }
     override fun timesAssign(b: IntVector) { x *= b.x; y *= b.y }
-    override fun timesAssign(v: Int) { x *= v; y *= v }
     override fun equals(other: Any?): Boolean {
         if (other !is IntVector) return false
         return x == other.x && y == other.y
     }
 }
+
+operator fun IntVector.plusAssign(v: Int) { this += vec(v, v) }
+operator fun IntVector.minusAssign(v: Int) { this -= vec(v, v) }
+operator fun IntVector.divAssign(v: Int) { this /= vec(v, v) }
+operator fun IntVector.timesAssign(v: Int) { this *= vec(v, v) }
 
 operator fun IntVector.plus(b: IntVector) = vec(x, y).also { it += b }
 operator fun IntVector.plus(v: Int) = vec(x, y).also { it += v }
