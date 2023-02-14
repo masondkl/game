@@ -2,11 +2,9 @@ package me.mason.game.component
 
 import me.mason.game.*
 import java.nio.file.Paths
-
-const val BLOCK_UV_SCALE = 8
-val BLOCK_UV_SCALE_VEC = vec(BLOCK_UV_SCALE)
-const val BLOCK_SCALE = 32f
-val BLOCK_SCALE_VEC = vec(BLOCK_SCALE)
+import kotlin.math.PI
+import kotlin.math.ceil
+import kotlin.math.sin
 
 val GRASS_TOP_SPRITE = vec(0, 8)
 val DIRT_SPRITE = vec(8, 8)
@@ -25,84 +23,104 @@ fun sprite(material: Byte) = when (material) {
     else -> DIRT_SPRITE
 }
 
-interface Chunk {
-    val groups: Array<Group?>
-    val ids: Array<Int?>
-    val scale: Int
-    val blocks: Int
+val TILE_SCALE = 1.0f
+val TILE_SCALE_VEC = vec(TILE_SCALE)
+val TILE_UV_SCALE = 8
+val RENDER_SCALE = 43
+val RENDER_RADIUS = RENDER_SCALE / 2
+val WORLD_SCALE = 128
+val WORLD_RADIUS = WORLD_SCALE / 2
+
+interface World : MeshAdapter {
+    val colliders: List<Collider>
+    fun highestAt(x: Float): Float
 }
 
-fun chunk(types: Array<Byte>, scale: Int) = object : Chunk {
-    override val scale = scale
-    override val blocks = scale * scale
-    override val groups = Array<Group?>(blocks) { null }
-    override val ids = Array<Int?>(blocks) { null }
-    init { groups(scale, types, groups, ids) }
-}
-
-fun Chunk.draw(mesh: Mesh, index: Int) = groups.forEachIndexed { groupIndex, it ->
-    if (it == null || it.type == MATERIAL_AIR) return@forEachIndexed
-    val startX = it.start % scale
-    val x = (startX + (it.width / 2f) - (scale / 2)) * BLOCK_SCALE
-    val y = (it.start / scale - (scale / 2)) * BLOCK_SCALE
-    mesh.uv(index + groupIndex, sprite(it.type), BLOCK_UV_SCALE)
-    mesh.vertices(index + groupIndex, vec(x, y), vec(it.width * BLOCK_SCALE, BLOCK_SCALE))
-}
-
-const val CHUNK_SIZE = 16
-
-fun Window.world(): MeshAdapter {
-    val shader = shader(Paths.get("tiled.glsl"), 2, 2, 1)
-    val createBatch = { tiledMesh(MAX_VERTICES / shader.quadLength, shader) }
-    val scale = 16
-    val radius = scale / 2
-    val blocks = scale * scale
-    val types = Array(scale * scale) {
-        val y = (it / scale) - radius
-        if (y > 0) MATERIAL_AIR
-        else if (y == 0) MATERIAL_GRASS
-        else if (y > -4) MATERIAL_DIRT
+fun Window.world(shader: Shader): World {
+    val createBatch = { mesh(MAX_VERTICES / shader.quadLength, shader) }
+    fun perlin(x: Float) = (sin(2 * x) + sin(PI * x)).toFloat()
+    val perlin = Array(WORLD_SCALE) {
+        perlin(it / 150f) * 6f + perlin(it / 50f) * 3f + perlin(it / 300f) * 6f + perlin(it / 20f) * 2f
+    }
+    val colliders = Array(WORLD_SCALE * WORLD_SCALE) {
+        val x = it % WORLD_SCALE
+        val y = it / WORLD_SCALE
+        collider(vec(x - WORLD_RADIUS, y - WORLD_RADIUS).float(), TILE_SCALE_VEC)
+    }
+    val tiles = ByteArray(WORLD_SCALE * WORLD_SCALE) {
+        val x = it % WORLD_SCALE
+        val y = (it / WORLD_SCALE) - WORLD_RADIUS
+        if (y - perlin[x] > 0) MATERIAL_AIR
+        else if ((y - perlin[x]).toInt() == 0) MATERIAL_GRASS
+        else if (y - perlin[x] > -4) MATERIAL_DIRT
         else MATERIAL_STONE
     }
-    val chunk = chunk(types, CHUNK_SIZE)
-    return adapter(shader, scale * scale, createBatch) { mesh, index ->
-        chunk.draw(mesh, index)
-    }
-}
-
-//Greedy meshing
-
-interface Group {
-    val type: Byte
-    val start: Int
-    var width: Int
-}
-
-fun group(type: Byte, start: Int) = object : Group {
-    override val type = type
-    override val start = start
-    override var width = 1
-}
-
-fun groups(scale: Int, types: Array<Byte>, groups: Array<Group?>, ids: Array<Int?>) {
-    val blocks = scale * scale
-    var id = 0
-    (0 until blocks).forEach { current ->
-        val previous = current - 1
-        val y = current / scale
-        val previousY = previous / scale
-        val lastType = if (current in 0 until blocks) types[current] else null
-        val previousType = if (previous in 0 until blocks) types[previous] else null
-        if (previousType != null && ids[previous] != null && lastType == previousType && y == previousY) {
-            val groupId = ids[previous]!!
-            val group = groups[groupId]!!
-            ids[current] = groupId
-            group.width++
-            return@forEach
+    val delegate = adapter(RENDER_SCALE * RENDER_SCALE, shader, createBatch) { mesh, index ->
+        val cameraTile = camera.position.int() + WORLD_RADIUS
+        (0 until RENDER_SCALE * RENDER_SCALE).forEach {
+            val tileX = it % RENDER_SCALE - RENDER_RADIUS + cameraTile.x
+            val tileY = it / RENDER_SCALE - RENDER_RADIUS + cameraTile.y
+            if (tileX < 0 || tileY < 0 || tileX >= WORLD_SCALE || tileY >= WORLD_SCALE) return@forEach
+            val tileIndex = tileX + tileY * WORLD_SCALE
+            if (tiles[tileIndex] == MATERIAL_AIR) return@forEach
+            mesh.sprite(index + it, sprite(tiles[tileIndex]), vec(TILE_UV_SCALE))
+            mesh.bounds(index + it, vec(tileX - WORLD_RADIUS, tileY - WORLD_RADIUS).float(), TILE_SCALE_VEC)
         }
-        id++.let {
-            groups[it] = group(types[current], current)
-            ids[current] = it
+    }
+    return object : World, MeshAdapter by delegate {
+        override val colliders: List<Collider> get() {
+            val cameraTile = camera.position.int() + WORLD_RADIUS
+            return (0 until RENDER_SCALE * RENDER_SCALE).mapNotNull {
+                val tileX = it % RENDER_SCALE - RENDER_RADIUS + cameraTile.x
+                val tileY = it / RENDER_SCALE - RENDER_RADIUS + cameraTile.y
+                if (tileX < 0 || tileY < 0 || tileX >= WORLD_SCALE || tileY >= WORLD_SCALE) return@mapNotNull null
+                val tileIndex = tileX + tileY * WORLD_SCALE
+                if (tiles[tileIndex] == MATERIAL_AIR) return@mapNotNull null
+                colliders[tileIndex]
+            }
+        }
+        override fun highestAt(x: Float): Float {
+//            val cameraTile = (camera.position).int() + WORLD_RADIUS
+            val tileX = x.toInt() + WORLD_RADIUS
+            return ceil(perlin[tileX]) + TILE_SCALE / 2
         }
     }
 }
+
+
+
+////Greedy meshing
+//
+//interface Group {
+//    val type: Byte
+//    val start: Int
+//    var width: Int
+//}
+//
+//fun group(type: Byte, start: Int) = object : Group {
+//    override val type = type
+//    override val start = start
+//    override var width = 1
+//}
+//
+//fun Chunk.groups(types: Array<Byte>) {
+//    var id = 0
+//    (0 until CHUNK_SIZE * CHUNK_SIZE).forEach { current ->
+//        val previous = current - 1
+//        val y = current / CHUNK_SIZE
+//        val previousY = previous / CHUNK_SIZE
+//        val lastType = if (current in 0 until (CHUNK_SIZE * CHUNK_SIZE)) types[current] else null
+//        val previousType = if (previous in 0 until (CHUNK_SIZE * CHUNK_SIZE)) types[previous] else null
+//        if (previousType != null && ids[previous] != null && lastType == previousType && y == previousY) {
+//            val groupId = ids[previous]!!
+//            val group = groups[groupId]!!
+//            ids[current] = groupId
+//            group.width++
+//            return@forEach
+//        }
+//        id++.let {
+//            groups[it] = group(types[current], current)
+//            ids[current] = it
+//        }
+//    }
+//}

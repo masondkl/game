@@ -69,7 +69,7 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
         override var dt = 0f
         override var elapsed = 0f
         override val id = id
-        override val camera = camera(vec(0f, 0f))
+        override val camera = camera()
         override val keys = BitSet(256).apply {
             keys { key, action ->
                 if (key !in 0 until 256) return@keys
@@ -110,11 +110,13 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
         override fun Window.draw(vararg adapters: MeshAdapter) {
             offsets.clear()
             meshes.values.forEach {
-                it.quads.clear()
-                it.data.fill(0f, 0, it.data.size)
+                it.clear(0 until it.limit)
             }
             for (adapter in adapters) {
                 val mesh = meshes.getOrPut(adapter.shader) { adapter.createMesh() }
+//                println("a: ${mesh.quads.previousSetBit(mesh.limit) + adapter.limit}")
+//                println("limit: ${mesh.limit}")
+
                 if (mesh.quads.previousSetBit(mesh.limit) + adapter.limit >= mesh.limit) error("overflows")
                 val offset = offsets[adapter.shader] ?: 0
                 offsets[adapter.shader] = offset + adapter.limit

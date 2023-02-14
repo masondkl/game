@@ -47,6 +47,7 @@ operator fun FloatVector.div(v: Float) = vec(x, y).also { it /= v }
 operator fun FloatVector.times(b: FloatVector) = vec(x, y).also { it *= b }
 operator fun FloatVector.times(v: Float) = vec(x, y).also { it *= v }
 
+fun FloatVector.set(b: FloatVector) { x = b.x; y = b.y }
 fun FloatVector.int() = vec(x.toInt(), y.toInt())
 fun FloatVector.clone() = vec(x, y)
 
@@ -90,6 +91,7 @@ operator fun IntVector.div(v: Int) = vec(x, y).also { it /= v }
 operator fun IntVector.times(b: IntVector) = vec(x, y).also { it *= b }
 operator fun IntVector.times(v: Int) = vec(x, y).also { it *= v }
 
+fun IntVector.set(b: IntVector) { x = b.x; y = b.y }
 fun IntVector.float() = vec(x.toFloat(), y.toFloat())
 fun IntVector.clone() = vec(x, y)
 

@@ -11,7 +11,7 @@ import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.readBytes
 
-const val MAX_VERTICES = (Short.MAX_VALUE).toInt()
+const val MAX_VERTICES = (Short.MAX_VALUE).toInt() * 4
 val ELEMENT_ORDER = intArrayOf(2, 1, 0, 0, 1, 3)
 val ELEMENTS = IntArray(MAX_VERTICES * 6) {
     ELEMENT_ORDER[it % 6] + (it / 6) * 4
