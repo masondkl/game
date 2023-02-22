@@ -8,54 +8,62 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource.Monotonic.markNow
 
-private val UV_SCALE = vec(15, 20)
-private val SCALE = vec(1.5f, 2.0f)
+private val UV_SCALE = vec(16, 20)
+private val SCALE = vec(32f, 40f)
 
 val RIGHT =       arrayOf(vec(0, 118), vec(15, 118), vec(30, 118), vec(45, 118))
 val LEFT =      arrayOf(vec(60, 118), vec(75, 118), vec(90, 118), vec(105, 118))
-private val WALK_LEFT =  arrayOf(vec(0, 138), vec(15, 138), vec(30, 138), vec(45, 138))
-private val WALK_RIGHT = arrayOf(vec(60, 138), vec(75, 138), vec(90, 138), vec(105, 138))
+val WALK_LEFT =       arrayOf(vec(0, 138), vec(15, 138), vec(30, 138), vec(45, 138))
+val WALK_RIGHT =      arrayOf(vec(60, 138), vec(75, 138), vec(90, 138), vec(105, 138))
 
-interface Player : MeshAdapter {
+interface Player : Mesh {
+    val tick: Tick
     val position: FloatVector
 }
 
-val MAX_MOTION = 8f
+val MAX_MOTION = 256f
 
 fun Window.player(world: World, shader: Shader): Player {
-    val createBatch: () -> (Mesh) = { mesh(MAX_VERTICES / shader.quadLength, shader) }
+    val mesh = mesh(1, shader)
     val position = vec(0f, world.highestAt(0f) + 2.5f)
     val motion = vec(0f)
-    val collider = collider(position, SCALE)
+    val collider = collider(position, vec(31f, 39f))
     var animation = LEFT
     keys(GLFW_KEY_SPACE, GLFW_PRESS) { _, _ ->
-        if (world.colliders.none { collider.collides(it, vec(0f, -0.1f)) })
+        if (world.colliders.none { collider.collides(it, vec(0f, -1f)) })
             return@keys
-        motion.y = 9.0f
+        motion.y = 288f
     }
-    val delegate = adapter(1, shader, createBatch) { mesh, index ->
-        mesh.sprite(index, animation[frame(0.5.seconds, animation.size)], UV_SCALE)
-        mesh.bounds(index, position, SCALE)
+    var last = markNow()
+    val tick: Tick = {
+        mesh.sprite(0, animation[frame(0.5.seconds, animation.size)], UV_SCALE)
+        mesh.bounds(0, (position * 32f).int().float() / 32f, SCALE)
         if (keys[GLFW_KEY_A]) {
-            motion.x = max(min(motion.x - dt * 8f, MAX_MOTION * dt), -MAX_MOTION * dt)
+            motion.x = max(min(motion.x - dt * MAX_MOTION, MAX_MOTION * dt), -MAX_MOTION * dt)
             animation = WALK_LEFT
         }
         if (keys[GLFW_KEY_D]) {
-            motion.x = max(min(motion.x + dt * 8f, MAX_MOTION * dt), -MAX_MOTION * dt)
+            motion.x = max(min(motion.x + dt * MAX_MOTION, MAX_MOTION * dt), -MAX_MOTION * dt)
             animation = WALK_RIGHT
         }
         if (abs(motion.x) < 0.0005f && animation.contentEquals(WALK_LEFT)) animation = RIGHT
         if (abs(motion.x) < 0.0005f && animation.contentEquals(WALK_RIGHT)) animation = LEFT
         motion.x *= 0.9f
-        motion.y -= 48f * dt
+        motion.y -= 1500 * dt
         if (motion.y < 0f) motion.y = 0f
         position += collider.move(
-            vec(0f, max(-8f * dt, -0.9f)) + vec(motion.x, min(motion.y, 16f * dt)),
+            vec(0f, max(-256f * dt, -16f)) + vec(motion.x, min(motion.y, 512f * dt)),
             world.colliders
         )
+        if (last.elapsedNow() > 3.seconds) {
+//            println("${position.x}, ${position.y}")
+            last = markNow()
+        }
     }
-    return object : Player, MeshAdapter by delegate {
+    return object : Player, Mesh by mesh {
+        override val tick = tick
         override val position = position
     }
 }
@@ -78,9 +86,9 @@ fun Collider.move(motion: FloatVector, collisions: List<Collider>): FloatVector 
         val max = position.x + change.x + scale.x / 2
         val min = position.x + change.x - scale.x / 2
         if (withMax - min > change.x && withMax - min < with.scale.x) {
-            change.x += (withMax - min) * 1.025f
+            change.x += (withMax - min) * 1.05f
         } else if (max - withMin < change.x && max - withMin < with.scale.x) {
-            change.x -= (max - withMin) * 1.025f
+            change.x -= (max - withMin) * 1.05f
         } else change.x = 0f
     }; return change
 }

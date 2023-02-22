@@ -59,9 +59,10 @@ fun texture(path: Path): Bind = glGenTextures().let { id ->
 }
 
 interface Shader : Bind {
+    val attributes: IntArray
     val attributesLength: Int
+    val attributesCount: Int
     val quadLength: Int
-    val attributes: Int
     val vao: Int
     val vbo: Int
     fun mat4f(name: String, mat4: Matrix4f)
@@ -136,9 +137,10 @@ fun shader(path: Path, vararg attributes: Int): Shader {
     val self = Bind({ glUseProgram(program) }, { glUseProgram(0) })
     val attributesLength = attributes.fold(0) { acc, attribute -> acc + attribute }
     return object : Shader, Bind by self {
+        override val attributes = attributes
         override val attributesLength = attributesLength
+        override val attributesCount = attributes.size
         override val quadLength = attributesLength * 4
-        override val attributes = attributes.size
         override val vao = vao
         override val vbo = vbo
 

@@ -1,7 +1,6 @@
 package me.mason.game
 
-import me.mason.game.component.MeshAdapter
-import me.mason.game.component.adapter
+import me.mason.game.component.Tick
 
 //private const val SLICED_LIMIT = 9
 //
@@ -19,13 +18,19 @@ import me.mason.game.component.adapter
 //    }
 //}
 
+interface Sliced : Mesh {
+    val tick: Tick
+    val worldPosition: FloatVector
+}
+
 fun Window.sliced(
     shader: Shader,
-    worldPosition: FloatVector, worldScale: FloatVector, inset: Float,
+    origin: FloatVector, worldScale: FloatVector, inset: Float,
     uvPosition: IntVector, uvScale: Int,
     ui: Boolean = false,
 //    slicedTick: Tick<Entity> = {}
-): MeshAdapter {
+): Sliced {
+    val mesh = mesh(9, shader)
 //    val slices = Array(9) { index ->
 //        val x = index % 3
 //        val y = index / 3
@@ -50,26 +55,28 @@ fun Window.sliced(
 //    val entity = group(*slices, scale = worldScale, ui = ui) {
 //        slicedTick(this@sliced, this)
 //    }
-    val limit = 9
-    return adapter(limit, shader, { textureBatch(limit, shader) }) { mesh, index ->
-        (0 until 9).forEach {
-            val x = it % 3
-            val y = it / 3
-            val stretch = worldScale - 2 * inset
-            val position = vec(
-                when (x) { 2 -> worldScale.x - inset / 2; 1 -> worldScale.x / 2; else -> inset / 2 },
-                when (y) { 2 -> inset / 2; 1 -> worldScale.y / 2; else -> worldScale.y - inset / 2 }
-            ) + worldPosition - worldScale / 2f
-            val scale = vec(
-                if (x == 1) stretch.x else inset,
-                if (y == 1) stretch.y else inset
-            )
-            val uv = uvPosition + vec(
-                uvScale / 3f * x,
-                uvScale / 3f * y
-            ).int()
-            mesh.sprite(index + it, uv, vec((uvScale / 3f).toInt(), (uvScale / 3f).toInt()))
-            mesh.bounds(index + it, position + (if (ui) camera.position else vec(0f)), scale)
+    return object : Sliced, Mesh by mesh {
+        override val worldPosition = origin
+        override val tick: Tick = {
+            (0 until 9).forEach {
+                val x = it % 3
+                val y = it / 3
+                val stretch = worldScale - 2 * inset
+                val position = vec(
+                    when (x) { 2 -> worldScale.x - inset / 2; 1 -> worldScale.x / 2; else -> inset / 2 },
+                    when (y) { 2 -> inset / 2; 1 -> worldScale.y / 2; else -> worldScale.y - inset / 2 }
+                ) + worldPosition - worldScale / 2f
+                val scale = vec(
+                    if (x == 1) stretch.x else inset,
+                    if (y == 1) stretch.y else inset
+                )
+                val uv = uvPosition + vec(
+                    uvScale / 3f * x,
+                    uvScale / 3f * y
+                ).int()
+                mesh.sprite(it, uv, vec((uvScale / 3f).toInt(), (uvScale / 3f).toInt()))
+                mesh.bounds(it, position + (if (ui) camera.position else vec(0f)), scale)
+            }
         }
     }
 }

@@ -12,7 +12,7 @@ interface Camera {
 
 fun camera() = object : Camera {
     override val position = vec(0f, 0f)
-    override val projection = Matrix4f().setOrtho(-20f, 20f, -11.25f, 11.25f, 0.0f, 100.0f)
+    override val projection = Matrix4f().setOrtho(-1280f/2f, 1280.0f/2, -720f/2f, 720.0f/2, 0.0f, 100.0f)
     override val view = Matrix4f()
     override fun look() {
         view.identity()

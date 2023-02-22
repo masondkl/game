@@ -1,7 +1,5 @@
 package me.mason.game
 
-import me.mason.game.component.MeshAdapter
-import me.mason.game.component.invoke
 import org.lwjgl.glfw.Callbacks
 import org.lwjgl.glfw.GLFW.*
 import org.lwjgl.glfw.GLFWErrorCallback
@@ -24,7 +22,7 @@ interface Window {
     fun keys(key: Int = -1, action: Int = -1, block: (Int, Int) -> (Unit))
     fun mouse(key: Int = -1, action: Int = -1, block: (Int, Int) -> (Unit))
     fun scene(spriteSheet: Bind, block: Draw)
-    fun Window.draw(vararg adapters: MeshAdapter)
+    fun Window.draw(vararg adapters: Mesh)
 }
 
 fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() -> (Unit)) {
@@ -43,6 +41,7 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
         (videoMode.height() - originHeight) / 2
     )
 
+    glfwSetInputMode(id, GLFW_CURSOR, GLFW_CURSOR_DISABLED)
     glfwMakeContextCurrent(id)
     glfwSwapInterval(0)
     glfwShowWindow(id)
@@ -107,20 +106,20 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
             sheet = spriteSheet
             scene = block
         }
-        override fun Window.draw(vararg adapters: MeshAdapter) {
+        override fun Window.draw(vararg adapters: Mesh) {
             offsets.clear()
             meshes.values.forEach {
                 it.clear(0 until it.limit)
             }
             for (adapter in adapters) {
-                val mesh = meshes.getOrPut(adapter.shader) { adapter.createMesh() }
-//                println("a: ${mesh.quads.previousSetBit(mesh.limit) + adapter.limit}")
-//                println("limit: ${mesh.limit}")
-
-                if (mesh.quads.previousSetBit(mesh.limit) + adapter.limit >= mesh.limit) error("overflows")
-                val offset = offsets[adapter.shader] ?: 0
-                offsets[adapter.shader] = offset + adapter.limit
-                adapter(mesh, offset)
+                val mesh = meshes.getOrPut(adapter.shader) { mesh(MAX_VERTICES / adapter.shader.quadLength, adapter.shader) }
+                var index = adapter.quads.nextSetBit(0)
+                while (index != -1) {
+                    val offset = offsets[adapter.shader] ?: 0
+                    mesh.copy(adapter.data, index, offset)
+                    offsets[adapter.shader] = offset + 1
+                    index = adapter.quads.nextSetBit(index + 1)
+                }
             }
             meshes.forEach { (shader, mesh) ->
                 glBindBuffer(GL_ARRAY_BUFFER, shader.vbo)
@@ -137,9 +136,9 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
                 shader.mat4f("uView", camera.view)
 
                 glBindVertexArray(shader.vao)
-                for (i in 0 until shader.attributes) glEnableVertexAttribArray(i)
+                for (i in 0 until shader.attributesCount) glEnableVertexAttribArray(i)
                 glDrawElements(GL_TRIANGLES, ELEMENTS.size, GL_UNSIGNED_INT, 0)
-                for (i in 0 until shader.attributes) glDisableVertexAttribArray(i)
+                for (i in 0 until shader.attributesCount) glDisableVertexAttribArray(i)
                 glBindVertexArray(0)
 
                 sheet.detach()
