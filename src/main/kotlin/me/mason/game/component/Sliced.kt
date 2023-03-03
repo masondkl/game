@@ -1,6 +1,6 @@
-package me.mason.game
+package me.mason.game.component
 
-import me.mason.game.component.Tick
+import me.mason.game.*
 
 //private const val SLICED_LIMIT = 9
 //
@@ -21,42 +21,20 @@ import me.mason.game.component.Tick
 interface Sliced : Mesh {
     val tick: Tick
     val worldPosition: FloatVector
+    var sprite: IntVector
 }
 
 fun Window.sliced(
     shader: Shader,
     origin: FloatVector, worldScale: FloatVector, inset: Float,
-    uvPosition: IntVector, uvScale: Int,
-    ui: Boolean = false,
-//    slicedTick: Tick<Entity> = {}
+    sprite: IntVector, spriteScale: Int,
+    ui: Boolean = false
 ): Sliced {
-    val mesh = mesh(9, shader)
-//    val slices = Array(9) { index ->
-//        val x = index % 3
-//        val y = index / 3
-//        val stretch = worldScale - 2 * inset
-//        val sprite = uv(
-//            uvPosition + vec(
-//                uvScale / 3f * x,
-//                uvScale / 3f * (2 - y)
-//            ).int(),
-//            vec((uvScale / 3f).toInt(), (uvScale / 3f).toInt())
-//        )
-//        val slicePosition = vec(
-//            when (x) { 2 -> inset / 2; 1 -> worldScale.x / 2; else -> worldScale.x - inset / 2 },
-//            when (y) { 2 -> inset / 2 ; 1 -> worldScale.y / 2; else -> worldScale.y - inset / 2 }
-//        ) + worldPosition - worldScale / 2f
-//        val sliceScale = vec(
-//            if (x == 1) stretch.x else inset,
-//            if (y == 1) stretch.y else inset
-//        )
-//        entity(worldPosition, worldScale, animation(state(index, sprite, sliceScale, worldPosition - slicePosition)))
-//    }
-//    val entity = group(*slices, scale = worldScale, ui = ui) {
-//        slicedTick(this@sliced, this)
-//    }
+    val mesh = mesh(shader, 9)
     return object : Sliced, Mesh by mesh {
-        override val worldPosition = origin
+        val self = this
+        override val worldPosition = origin.clone()
+        override var sprite = sprite.clone()
         override val tick: Tick = {
             (0 until 9).forEach {
                 val x = it % 3
@@ -70,11 +48,11 @@ fun Window.sliced(
                     if (x == 1) stretch.x else inset,
                     if (y == 1) stretch.y else inset
                 )
-                val uv = uvPosition + vec(
-                    uvScale / 3f * x,
-                    uvScale / 3f * y
+                val uv = self.sprite + vec(
+                    spriteScale / 3f * x,
+                    spriteScale / 3f * y
                 ).int()
-                mesh.sprite(it, uv, vec((uvScale / 3f).toInt(), (uvScale / 3f).toInt()))
+                mesh.sprite(it, uv, vec((spriteScale / 3f).toInt(), (spriteScale / 3f).toInt()))
                 mesh.bounds(it, position + (if (ui) camera.position else vec(0f)), scale)
             }
         }

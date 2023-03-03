@@ -10,7 +10,6 @@ out vec2 fTexPosition;
 void main()
 {
     fTexPosition = vec2(mod(aTexPosition, 512.0), aTexPosition / 512.0) / 512.0;
-//    fTexPosition = aTexPosition;
     gl_Position = uProjection * uView * vec4(aPos, 1.0, 1.0);
 }
 

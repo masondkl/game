@@ -1,5 +1,6 @@
 package me.mason.game
 
+import org.lwjgl.BufferUtils
 import org.lwjgl.glfw.Callbacks
 import org.lwjgl.glfw.GLFW.*
 import org.lwjgl.glfw.GLFWErrorCallback
@@ -9,6 +10,8 @@ import org.lwjgl.opengl.GL30.glBindVertexArray
 import org.lwjgl.system.MemoryUtil
 import java.util.*
 import kotlin.collections.ArrayList
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.time.Duration.Companion.seconds
 
 typealias Draw = Window.() -> (Unit)
@@ -19,9 +22,12 @@ interface Window {
     val camera: Camera
     val keys: BitSet
     val mouse: BitSet
+    val cursor: FloatVector
+    val uiCursor: FloatVector
     fun keys(key: Int = -1, action: Int = -1, block: (Int, Int) -> (Unit))
+    fun keys(vararg keys: Int, action: Int = -1, block: (Int, Int) -> (Unit))
     fun mouse(key: Int = -1, action: Int = -1, block: (Int, Int) -> (Unit))
-    fun scene(spriteSheet: Bind, block: Draw)
+    fun scene(spriteSheet: Bind, block: Draw = {})
     fun Window.draw(vararg adapters: Mesh)
 }
 
@@ -87,12 +93,43 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
                 }
             }
         }
+        override val uiCursor: FloatVector
+            get() {
+                val x = BufferUtils.createDoubleBuffer(1)
+                val y = BufferUtils.createDoubleBuffer(1)
+                val width = BufferUtils.createIntBuffer(1)
+                val height = BufferUtils.createIntBuffer(1)
+                glfwGetCursorPos(id, x, y)
+                glfwGetWindowSize(id, width, height)
+                glfwSetCursorPos(
+                    id,
+                    min(max(x[0], 0.0), width[0].toDouble()),
+                    min(max(y[0], 0.0), height[0].toDouble())
+                )
+                if (x[0] < 0 || x[0] > width[0] ||
+                    y[0] < 0 || y[0] > height[0]
+                ) glfwGetCursorPos(id, x, y)
+                return (vec(x[0].toFloat(), height[0] - y[0].toFloat()) - WINDOW_SCALE / 2f)
+                    .max(-WINDOW_RADIUS).min(WINDOW_RADIUS)
+            }
+        override val cursor: FloatVector
+            get() = uiCursor + camera.position
+
         override fun keys(key: Int, action: Int, block: (Int, Int) -> (Unit)) =
             keyCallbacks.plusAssign { inKey, inAction ->
                 if ((inKey != key && key != -1) || (inAction != action && action != -1))
                     return@plusAssign
                 block(inKey, inAction)
             }
+
+        override fun keys(vararg keys: Int, action: Int, block: (Int, Int) -> Unit) {
+            keyCallbacks.plusAssign { inKey, inAction ->
+                if (inKey !in keys || (inAction != action && action != -1))
+                    return@plusAssign
+                block(inKey, inAction)
+            }
+        }
+
         override fun mouse(key: Int, action: Int, block: (Int, Int) -> (Unit)) =
             mouseCallbacks.plusAssign { inKey, inAction ->
                 if ((inKey != key && key != -1) || (inAction != action && action != -1))
@@ -106,13 +143,14 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
             sheet = spriteSheet
             scene = block
         }
+
         override fun Window.draw(vararg adapters: Mesh) {
             offsets.clear()
             meshes.values.forEach {
                 it.clear(0 until it.limit)
             }
             for (adapter in adapters) {
-                val mesh = meshes.getOrPut(adapter.shader) { mesh(MAX_VERTICES / adapter.shader.quadLength, adapter.shader) }
+                val mesh = meshes.getOrPut(adapter.shader) { mesh(adapter.shader, MAX_VERTICES / adapter.shader.quadLength) }
                 var index = adapter.quads.nextSetBit(0)
                 while (index != -1) {
                     val offset = offsets[adapter.shader] ?: 0
@@ -124,9 +162,6 @@ fun window(title: String, originWidth: Int, originHeight: Int, block: Window.() 
             meshes.forEach { (shader, mesh) ->
                 glBindBuffer(GL_ARRAY_BUFFER, shader.vbo)
                 glBufferSubData(GL_ARRAY_BUFFER, 0, mesh.data)
-//                for (i in 0 until shader.attributesLength) {
-//                    print("${mesh.data[i]}, ")
-//                }; println()
 
                 shader.attach()
                 shader.texture("TEX_SAMPLER", 0)

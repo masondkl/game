@@ -78,30 +78,17 @@ fun vertexBuffers(vararg attributes: Int): Pair<Int, Int> {
     val vbo = glGenBuffers()
     val ebo = glGenBuffers()
     val vertexBytes = attributes.fold(0) { acc, it -> acc + it } * Float.SIZE_BYTES
-
     glBindVertexArray(vao)
     glBindBuffer(GL_ARRAY_BUFFER, vbo)
     glBufferData(GL_ARRAY_BUFFER, (MAX_VERTICES * vertexBytes).toLong(), GL_DYNAMIC_DRAW)
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, BufferUtils.createIntBuffer(ELEMENTS.size).put(ELEMENTS).flip(), GL_STATIC_DRAW)
-
     var offset = 0
     attributes.forEachIndexed { index, attribute ->
         glVertexAttribPointer(index, attribute, GL_FLOAT, false, vertexBytes, (offset * Float.SIZE_BYTES).toLong())
         glEnableVertexAttribArray(index)
         offset += attribute
     }
-
-//    glVertexAttribPointer(0, SHADER_POSITION_LENGTH_FLOAT, GL_FLOAT, false, VERTEX_BYTES, 0)
-//    glEnableVertexAttribArray(0)
-//    glVertexAttribPointer(1, SHADER_SCALE_LENGTH_FLOAT, GL_FLOAT, false, VERTEX_BYTES, (SHADER_POSITION_LENGTH_FLOAT * Float.SIZE_BYTES).toLong())
-//    glEnableVertexAttribArray(1)
-//    glVertexAttribPointer(2, SHADER_START_LENGTH_FLOAT, GL_FLOAT, false, VERTEX_BYTES, ((SHADER_POSITION_LENGTH_FLOAT + SHADER_SCALE_LENGTH_FLOAT) * Float.SIZE_BYTES).toLong())
-//    glEnableVertexAttribArray(2)
-//    glVertexAttribPointer(3, SHADER_UV_START_LENGTH_FLOAT, GL_FLOAT, false, VERTEX_BYTES, ((SHADER_POSITION_LENGTH_FLOAT + SHADER_SCALE_LENGTH_FLOAT + SHADER_START_LENGTH_FLOAT) * Float.SIZE_BYTES).toLong())
-//    glEnableVertexAttribArray(3)
-//    glVertexAttribPointer(4, SHADER_UV_SCALE_LENGTH_FLOAT, GL_FLOAT, false, VERTEX_BYTES, ((SHADER_POSITION_LENGTH_FLOAT + SHADER_SCALE_LENGTH_FLOAT + SHADER_START_LENGTH_FLOAT + SHADER_UV_START_LENGTH_FLOAT) * Float.SIZE_BYTES).toLong())
-//    glEnableVertexAttribArray(4)
     return Pair(vao, vbo)
 }
 

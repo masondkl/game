@@ -28,7 +28,7 @@ interface Mesh {
     fun clear(quad: IntRange)
 }
 
-fun mesh(limit: Int, shader: Shader, init: Mesh.() -> (Unit) = {}): Mesh =
+fun mesh(shader: Shader, limit: Int, init: Mesh.() -> (Unit) = {}): Mesh =
     object : Mesh {
         override val shader = shader
         override val limit = limit
